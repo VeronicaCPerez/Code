@@ -1,0 +1,208 @@
+*database
+sysuse auto, clear
+
+
+*correlation table
+corrtex make price mpg rep78 headroom trunk weight length, file("corr1.tex") sig replace landscape
+
+
+*freq
+					*
+mat stats = J(2,1,.)
+local n = 1
+tab foreign, matcell(stats)
+
+matrix list stats
+
+//** exporting table**//
+	
+frmttable using "estdescr.tex", statmat(stats) replace ///
+	landscape tex fragment ///
+	rtitles( "Domestic" \ "Foreign" ) ///
+	ctitles("# of cars")
+	title("Tabla 1: Frecuencia")
+
+
+
+*ttest 
+
+global Y "price weight"
+mat Test=J(2,5,.)
+
+*** Loop T-test
+
+	local n=1
+	foreach x of global Y {
+		ttest `x', by(foreign) 
+		mat Test[`n',1]=r(mu_1)
+		mat Test[`n',2]=r(mu_2)
+		mat Test[`n',3]=r(mu_1) - r(mu_2) 
+		mat Test[`n',4]=r(t)
+		mat Test[`n',5]=r(p)
+		local n=`n'+1
+}
+		
+	matrix list Test
+
+*** matrix
+
+matrix stars = J(2,6,0)
+
+	forvalues k = 1/2 {
+			matrix stars[`k',5] = (Test[`k',5] < 0.1,0) + ///
+			(abs(Test[`k',5]) < 0.05,0) ///
+			+ (abs(Test[`k',5]) < 0.01,0)
+			}
+
+		
+mat list stars
+*exporting ttest table
+	frmttable using "ttest.tex", statmat(Test) annotate(stars) ///
+	asymbol(*,**,***) replace landscape hlines(1) tex fragment ///
+	note("*** p-valor<0.01, **p-valor<0.05, **p-valor<0.1") ///
+	rtitles( "Gastos Menuales" \ "Total personas en el hogar") ///
+	ctitles("" , "Media" "Media"\"", "Domestic" "Foreign", "Diff.medias" /// 
+	, "t" , "P-valor" ) ///
+	title("Tabla 1: Differencia de medias")
+
+
+				******** 	Inciso 4) 	********
+			** Revisando el puntaje en la prueba**
+			
+estpost ttest mate, by(madre_trabaja)  	
+esttab using "$salidas\matettest.tex", replace noobs cells(" mu_1(fmt(4)) mu_2(fmt(4)) b(star fmt(4)) p(fmt(4))") ///
+star(* 0.1 ** .05 *** 0.01) collabels( "Media No trabaja" "Media Trabaja" "Diff." "p-valor") ///
+title(Distribución puntaje) nonumbers varlabels(`e(labels)') 
+
+hist mate, by(madre_trabaja) graphregion(color(white)) bgcolor(white) xtitle("") ytitle("Densidad") bcolor("navy")
+graph export "$salidas\Histogramamatematicas.png",replace
+
+			******** 	Inciso 5) 	********
+			
+*scatter math score per group
+gen lnmate = log(mate)
+
+forvalues i=0/1 {	
+		local t : label (madre_trabaja) `i'
+		twoway (scatter lnmate madre_educ) (lfit lnmate madre_educ) if madre_trabaja== `i', ///
+		graphregion(color(white)) bgcolor(white) ///
+		xtitle(Educación de la madre en años, size(small)) name(madre_`i',replace) ///
+		title("`t'",size(small))
+		}
+
+graph combine madre_0 madre_1, title(Distribución puntaje de matemáticas) graphregion(color(white))
+graph export "$salidas\scattermate.png",replace
+
+
+
+***********************************************************************************************************
+***********************************************************************************************************
+								*******************************************
+								**** Regression-Discontinuity Analysis ****
+								*******************************************
+use Punto3.dta,clear
+
+
+		******** 	c) checking assumptions 	********
+		
+**assumptions: 
+	** 1. Discontinuity
+	rdplot T Z, graph_options(title(Discontinuidad de Z) /// 
+	ytitle(Alcalde islámico en t) xtitle(Votos candidato islámico) ///
+	graphregion(color(white)))
+	graph export "$salidas\3cdiscontinuidad.png",replace
+	
+	**	2. No manipulation
+	kdensity Z, xline(0)
+	graph export "$salidas\3cmanipulacion.png",replace
+	
+	**	3. Local continuity
+	
+	global A "ageshr19 lpop1994 shhs"
+		
+	foreach x of global A {
+			local w : var label `x'
+			rdplot `x' Z, name("con`i'",replace) graph_options(title(RDPLOT `w') ///
+			ytitle(`w') xtitle(Votos candidato islámico en t) graphregion(color(white)))
+			graph export "cont`x'.png",replace
+			}	
+
+		**Ttest
+			mat Test=J(9,5,.)
+			
+			local n=1
+			local z=4
+			local c=7
+			foreach x of global A {
+				ttest `x' if inrange(Z,-10,10),by(T) 
+				mat Test[`n',1]=r(mu_1)
+				mat Test[`n',2]=r(mu_2)
+				mat Test[`n',3]=r(mu_1) - r(mu_2) 
+				mat Test[`n',4]=r(t)
+				mat Test[`n',5]=r(p)
+				local n=`n'+1
+				
+				ttest `x' if inrange(Z,-15,15),by(T) 
+				mat Test[`z',1]=r(mu_1)
+				mat Test[`z',2]=r(mu_2)
+				mat Test[`z',3]=r(mu_1) - r(mu_2) 
+				mat Test[`z',4]=r(t)
+				mat Test[`z',5]=r(p)
+				local z=`z'+1
+				
+				ttest `x' if inrange(Z,-20,20),by(T) 
+				mat Test[`c',1]=r(mu_1)
+				mat Test[`c',2]=r(mu_2)
+				mat Test[`c',3]=r(mu_1) - r(mu_2) 
+				mat Test[`c',4]=r(t)
+				mat Test[`c',5]=r(p)
+				local c=`c'+1
+				
+				}
+				
+			mat colnames Test = "Media (No Islámico)" "Media (Islámico)" ///
+			"Diff." "t" "pvalue"
+			matrix list Test
+			
+			*
+			matrix stars = J(9,6,0)
+
+			forvalues k = 1/9 {
+			matrix stars[`k',5] = (Test[`k',5] < 0.1,0) + ///
+				(abs(Test[`k',5]) < 0.05,0) ///
+				+ (abs(Test[`k',5]) < 0.01,0)
+			}
+
+			matrix list stars	
+	
+			frmttable using "$salidas\ttest.tex", statmat(Test) annotate(stars) ///
+			asymbol(*,**,***) replace landscape hlines(1) tex fragment ///
+			note("*** p-valor<0.01, **p-valor<0.05, **p-valor<0.1") ///
+			rtitles( "edad < 19(Rango 10)" \ "log pob. 1994(Rango 10)" \ ///
+			"tamaño hogar(Rango 10)" \ "edad < 19(Rango 15)" \ /// 
+			"log pob. 1994(Rango 15)" \ "tamaño hogar(Rango 15)" \ ///
+			"edad < 19 (Rango 20)" \ "log de pob. 1994(Rango 20)" \ ///
+			"tamaño hogar(Rango 20)") ///
+			ctitles("" , "Mean" "Mean"\"", "No Islámico" "Islámico", "Diff.medias" /// 
+			, "t" , "p-valor" ) ///
+			title("Tabla 1: Differencia de medias para continuidad local")
+			
+		
+		******** 	d) Choosing width ********
+
+gen zt = Z*T
+rename (Z T zt) (Margen islámico interaccion)
+
+reg Y Margen islámico interaccion
+outreg2 using "$salidas\taller1rd.tex", replace tex(fragment) /// 
+title("Tabla 2: Regresión") ///
+ctitle("% mujeres entre 15 y 20", "que completaron el bachillerato") 
+
+	
+
+			******** 	E) Choosing width ********
+			
+rdplot Y Margen if inrange(Margen,-15,15), ///
+graph_options(title(RDPLOT Rango 10) ytitle(% Población menor a 19) ///
+xtitle(Votos candidato islámico en t))
+graph export "$salidas\3e.png", replace 
