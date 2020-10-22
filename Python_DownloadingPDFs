@@ -1,0 +1,49 @@
+from lxml import html
+import requests
+from bs4 import BeautifulSoup
+from urllib.request import urlopen
+import re
+import pdfkit
+
+import urllib.request
+import re
+
+path_wkhtmltopdf = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+config = pdfkit.configuration(wkhtmltopdf=path_wkhtmltopdf)
+
+#1. abro la pagina de donde voy a sacar los links individuales
+
+filename = 'https://sidn.ramajudicial.gov.co/SIDN/NORMATIVA/DIARIOS_OFICIALES/'
+f = urlopen(filename)
+page_html = BeautifulSoup(f)
+
+#2. saco los html_nodes css = 'a' y html_attr = 'href' que incluyan normatividad/resoluciones y lo incluyo en la lista
+links = []
+
+for link in page_html.findAll('a', attrs={'href': re.compile("^/SIDN/NORMATIVA/DIARIOS_OFICIALES")}):
+    a = link.get('href')
+    links.append(a)
+    
+    #guardo en este objeto los links finales de cada pagina que contiene resiluciones
+
+links_final = []
+
+for i in links:
+    i = 'https://sidn.ramajudicial.gov.co' + i
+    links_final.append(i)
+    
+#Primero creo la lista vacía que contendra los links de los pdfs
+dct= {}
+for x in range(1864,2021):
+    buscar1 = "/DIARIOS_OFICIALES/" + str(x) + "%" + "20"
+    for i in links_final:
+        if (buscar1 in i):
+            f = urlopen(i)
+            pdf_html = BeautifulSoup(f)
+            pdfs_lista =[]
+            for link in pdf_html.findAll('a', attrs={'href': re.compile(".pdf$")}):
+                a = link.get('href')
+                link = 'https://sidn.ramajudicial.gov.co' + a
+                pdfs_lista.append(link)
+            dct['lst_%s' % x] = pdfs_lista
+            
