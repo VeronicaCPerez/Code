@@ -1,0 +1,135 @@
+use "$final/Bases/BaseFinal", clear
+
+*grafico los puntajes globales para los tratados y no tratados
+*clasifico tratados en 2017 y tratados en 2018
+	
+gen JU_2017_2 = 1 if Di == 1 & year == 2017
+gen JU_2018_2 = 1 if Di == 1 & year == 2018 & Di[_n-1] == 0
+
+by cole_cod_dane_sede: egen JU_2017 = max(JU_2017_2)
+by cole_cod_dane_sede: egen JU_2018 = max(JU_2018_2)
+
+gen JU_2 = 2017 if JU_2017 == 1
+replace JU_2 = 2018 if JU_2018 == 1
+replace JU_2 = 0 if JU == 0
+
+collapse (mean) punt_global, by(JU_2 year)
+
+	twoway(line punt_global year if JU_2==2017, xlabel(2015(1)2018) ///
+		yaxis(1) ytitle("Puntaje global estandarizado", ///
+		size(small)) graphregion(color(white) lwidth(large)))  ///
+		(line punt_global year if JU_2==2018, xlabel(2015(1)2018) ///
+		yaxis(1) ytitle("Puntaje global estandarizado",  ///
+		size(small)) xline(2018, ///
+		lcolor(green*3) lpattern(dot)) graphregion(color(white) lwidth(large)))  ///
+		(line punt_global year if JU==0, lpattern(dash) ///
+		lc(red*2) xline(2017, ///
+		lcolor(green*3) lpattern(dot)) legend(lab(1 "Tratados en 2017") ///
+		lab(2 "Tratados en 2018") lab(3 "No tratados")) ytitle("Puntaje global estandarizado", ///
+		size(small)))
+		graph export "$final/Resultados/tendencias.png", replace
+
+
+use "$final/Bases/BaseFinal", clear
+
+global rd "estrato educ_padre educ_madre"
+foreach x of global rd{
+gen `x'_1 =round(`x')
+}
+
+label define educ  0 "Ninguno" 1 "Primaria incompleta" 2 "Primaria completa" 3 "Secundaria incompleta" ///
+4 "Secundaria completa" 5 "Técnica o tecnológica incompleta" 6 "Técnica o tecnológica completa" ///
+7 "Educación profesional incompleta" 8 "Educación profesional completa" 9 "Postgrado"
+
+label values educ_madre_1 educ
+label values educ_padre_1 educ
+
+
+label var Di "Tratamiento"
+label var genero_estu "Promedio de mujeres en la sede" 
+label var etnia_estu "Promedio de estudiantes con etnia en la sede" 
+label var computador_estu "Promedio de estudiantes que tiene computador" 
+label var trabaja_estu "Promedio de estudiantes que trabajaban" 
+label var estrato_1 "Promedio de estrato estudiantes" 
+label var edad "Edad promedio de los estudiantes" 
+label var punt_lectura_critica "Puntaje promedio Lectura Critica" 
+label var punt_matematicas "Puntaje promedio Matematicas" 
+label var punt_c_naturales "Puntaje promedio C. Naturales" 
+label var punt_sociales_ciudadanas "Puntaje promedio C. Ciudadanas" 
+label var punt_ingles "Puntaje promedio Ingles" 
+label var punt_global "Puntaje promedio total" 
+label var educ_padre_1 "Categoria promedio de educ del padre" 
+label var educ_madre_1 "Categoria promedio de educ de la madre" 
+
+
+global X "genero_estu etnia_estu computador_estu trabaja_estu i.estrato_1 i.educ_padre_1 i.educ_madre_1 edad"
+gen Inter50 = Ci_previa_p50*Di
+label var Inter50 "Tratamiento*Calidad Previa"
+
+
+reghdfe std_punt_global Di Inter50 $X, absorb(cole_cod_dane_sede year)
+outreg2 using "$final/Resultados/Tabla1.doc", replace label keep(Di Inter50) addtext(Efecto Fijos de Sede, Si, Efectos fijos de año, Si, Controles, Si)
+reghdfe std_punt_global Di $X if Ci_previa_p50 == 1, absorb(cole_cod_dane_sede year)
+outreg2 using "$final/Resultados/Tabla1.doc", append ctitle("Calidad previa alta") label keep(Di) addtext(Efecto Fijos de Sede, Si, Efectos fijos de año, Si, Controles, Si)
+reghdfe std_punt_global Di $X if Ci_previa_p50 == 0, absorb(cole_cod_dane_sede year)
+outreg2 using "$final/Resultados/Tabla1.doc", append ctitle("Calidad previa baja") label keep(Di) addtext(Efecto Fijos de Sede, Si, Efectos fijos de año, Si, Controles, Si)
+
+
+by cole_cod_dane_sede: gen Tit = Di if year == 2017
+by cole_cod_dane_sede: replace Tit = Di + Tit[_n-1] if year ==2018
+
+global y "111001020443 111001065234 111001046914 111001047902 111001010910 111001001121 111001013544 111001013536 111001013480 111001013293 111001015181 111001024830 111001046299 111001077321 111001010731 111001016772 111001014869 211850001171 111850001380"
+foreach x of global y{
+replace Tit=3 if cole_cod_dane_sede=="`x'" & Tit[_n-1] ==2 & year==2019
+}
+
+order Tit, after(Di)
+replace Tit = 0 if Tit == .
+label var Tit "Años de tratamiento" 
+gen Inter50_1=Tit*Ci_previa_p50
+label define educ1  1 "Años de tratamiento =1 * Calidad previa" ///
+2 "Años de tratamiento =2 * Calidad previa" 3 "Años de tratamiento =3 * Calidad previa"
+label values Inter50_1 educ1
+
+reghdfe std_punt_global i.Tit i.Inter50_1 $X, absorb(cole_cod_dane_sede year)
+outreg2 using "$final/Resultados/Tabla2.doc", replace label keep(i.Tit i.Inter50_1) addtext(Efecto Fijos de Sede, Si, Efectos fijos de año, Si, Controles, Si)
+reghdfe std_punt_global i.Tit $X if Ci_previa_p50 == 1, absorb(cole_cod_dane_sede year)
+outreg2 using "$final/Resultados/Tabla2.doc", append ctitle("Calidad previa alta") label keep(i.Tit) addtext(Efecto Fijos de Sede, Si, Efectos fijos de año, Si, Controles, Si)
+reghdfe std_punt_global i.Tit $X if Ci_previa_p50 == 0, absorb(cole_cod_dane_sede year)
+outreg2 using "$final/Resultados/Tabla2.doc", append ctitle("Calidad previa baja") label keep(i.Tit) addtext(Efecto Fijos de Sede, Si, Efectos fijos de año, Si, Controles, Si)
+
+*estadisticas variables de control
+*genero_estu etnia_estu computador_estu trabaja_estu i.estrato_1 i.educ_padre_1 i.educ_madre_1 edad
+mat FACT2 =J(8,4,.)
+
+	local n = 1
+
+		foreach i of varlist genero_estu etnia_estu computador_estu trabaja_estu estrato educ_padre educ_madre edad {
+		quiet: ttest `i' if year==2015,by(JU)
+		mat FACT2[`n',1]=r(mu_1)
+		mat FACT2[`n',2]=r(mu_2)
+		mat FACT2[`n',3]=r(t)
+		mat FACT2[`n',4]=r(p)
+
+		local n = `n'+1
+		}
+
+
+		matlist FACT2
+		
+		matrix stars2 = J(8,5,0)
+
+		forvalues i = 1/8{
+		matrix stars2[`i',4] = (FACT2[`i',4] < 0.1,0) + ///
+						(abs(FACT2[`i',4]) < 0.05,0) ///
+						+ (abs(FACT2[`i',4]) < 0.01,0)
+		}
+
+		mat list stars2
+		
+frmttable using "$final/Resultados/ttest.doc", statmat(FACT2) annotate(stars2) ///
+asymbol(*,**,***) replace landscape ///
+note("*** p-valor<0.01, **p-valor<0.05, **p-valor<0.1") ///
+title("Table 2. Differences in Outsourcing by size of the firm.") ///
+rtitles("Género" \ "Etnia"\ "Computador"\ "Trabaja"\ "Estrato"\ "Educación padre" \ "Educación madre" \ "Edad") ///
+ctitles("", "Media Control" , "Media Tratamiento","t", "p")
