@@ -1,0 +1,696 @@
+#Paquetes de selenium
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import time
+import re 
+import pandas as pd
+
+#path a chromedriver
+PATH = "C:\Program Files (x86)\chromedriver.exe"
+
+#definir driver 
+driver = webdriver.Chrome(PATH)
+time.sleep(2)
+driver.get("https://archivos.gob.mx/guiageneral/")
+
+#Funciones
+
+#tratar de encontrar con xpath
+def find_xpath(path,time):
+    try:
+        elemento = WebDriverWait(driver,time).until(
+            EC.presence_of_element_located((By.XPATH, path))
+            )
+        return elemento
+    except:
+        print("Not possible to find",path)
+
+#tratar de encontrar con link
+def find_link(path,time):
+    try:
+        elemento = WebDriverWait(driver,time).until(
+            EC.presence_of_element_located((By.LINK_TEXT, path))
+            )
+        return elemento
+    except:
+        print("Not possible to find",path)
+
+#funcion que haga doble click en un xpath. go to your element, right click, xpath. paste between ''
+def doble_clicks(identificador,tiempo,tipo):
+    #tipo: 0 = xpath 1 = link_text 2 = 9d
+    try:
+        if tipo == 0:
+            elemento = WebDriverWait(driver,tiempo).until(
+                EC.presence_of_element_located((By.XPATH, identificador))
+            )
+        elif tipo == 1: 
+            elemento = WebDriverWait(driver,tiempo).until(
+                EC.presence_of_element_located((By.LINK_TEXT, identificador))
+            )
+        elif tipo == 2: 
+            elemento = WebDriverWait(driver,tiempo).until(
+                EC.presence_of_element_located((By.ID, identificador))
+            )
+        #definir la acción. Poner a que elemento se le va a realizar la acción
+        action = ActionChains(driver)
+        #doble click
+        action.double_click(elemento).perform()
+    except:
+        print("Not possible to find",identificador)
+
+#Primera rama: Archivo General de la Nacion
+Rama1 = doble_clicks('//*[@id="MX09017AGN_anchor"]',1,0)
+
+#Segunda rama: Instituciones Coloniales
+Rama2 = doble_clicks('//*[@id="MX09017AGNCL01_anchor"]',1,0)
+
+#Tercera rama: Real Audiencia
+Rama3 = doble_clicks('//*[@id="MX09017AGNCL01FO007RA_anchor"]',1,0)
+time.sleep(4)  #sin el tiempo no funciona
+#Cuarta rama 4: Tierras
+Rama4 = doble_clicks('//*[@id="MX09017AGNCL01FO007RASE022T_anchor"]',10,0)
+
+# # Una vez aquí, podemos buscar con soup la extructura de los contenedores y bajar
+
+#el xpath de la lista que contiene los contenedores es //*[@id="MX09017AGNCL01FO007RASE022T"]/ul
+
+contenedores = driver.find_element_by_xpath('//*[@id="MX09017AGNCL01FO007RASE022T"]/ul')
+time.sleep(2)
+texto_conte = contenedores.text
+#aqui tengo el nombre de los contenedores los separo por \n
+lista_conte = texto_conte.split('\n')
+len(lista_conte)
+#tengo 1586 
+
+###LOOP
+Texto_Final = []
+
+#para cada contenedor:
+for i in lista_conte[0:300]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+time.sleep(2)
+Texto_Final_2 = []
+
+for i in lista_conte[300:600]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_2.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+time.sleep(2)
+Texto_Final_3 = []
+
+for i in lista_conte[600:900]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_3.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+time.sleep(2)
+Texto_Final_4 = []
+
+# contenedor Contenedor 0760 fue el ultimo que corrio de este loop. dihuió en el 937
+
+for i in lista_conte[900:1200]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_4.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+time.sleep(2)
+Texto_Final_5 = []
+# Contenedor 1120 fue el ultimo que corrió de este loop. Siguió con el 1241
+
+for i in lista_conte[1200:1457]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_5.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+time.sleep(2)
+Texto_Final_6 = []
+
+for i in lista_conte[1457:1583]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_6.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+    
+#hasta el contenedor Contenedor 1577
+
+#hago los 3 volumenes que estan afuera 
+
+len(lista_conte)
+
+Texto_Final_7 = []
+
+for j in lista_conte[1583:1587]:
+    #hago click en el volumen
+    volumen = doble_clicks(j,1,1)
+    time.sleep(2)        
+    #obtengo los expedientes de este volumen. Necesito el xpath
+    # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+    try:
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_7.append(texto_expediente)
+    except:
+        texto = driver.find_element_by_id("texto")
+        #por ahora solo voy a meterlo en una lista.
+        texto_expediente = texto.text
+        Texto_Final_7.append(texto_expediente)
+    print(j)
+    time.sleep(2)
+    cont = doble_clicks(j,1,1)
+    time.sleep(2)
+    
+len(Texto_Final_7)
+
+#los que faltaron
+lista_conte[728] #0760
+
+Texto_Final_8 = []
+
+for i in lista_conte[729:900]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(3)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_8.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+
+#2dos   x = contenedor 1120 (no se el numero) - 1200 for i in lista_conte[x:1200]
+
+lista_conte[1082] #1120
+
+Texto_Final_9 = []
+
+for i in lista_conte[1083:1200]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(3)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_9.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+
+#3ros x= contenedor 1577 (no se el numero real) - 1583 for i in lista_conte[x:1583]
+
+lista_conte[1533] #1577
+
+Texto_Final_10 = []
+
+for i in lista_conte[1534:1583]:
+    #hago doble click en el contenedor
+    cont = doble_clicks(i,1,1)
+    time.sleep(3)
+    #ahora necesito el xpath de la lista de
+    # los volumenes = //*[@id="id del contenedor"]/ul    
+    contenedores_ids =  find_link(i,10)
+    id_conte_anchor = contenedores_ids.get_attribute("id")
+    id_conte = re.sub("_anchor","",id_conte_anchor)
+    #creo el xpath de la lista
+    xpath_lista_vols = '//*[@id="' + id_conte + '"]/ul'
+    
+    #ahora busco la lista de volumenes por el xpath
+    volumenes = find_xpath(xpath_lista_vols,10)
+    lista_vols = volumenes.text.split('\n')
+    #para cada volumen:
+    for j in lista_vols:
+        #hago click en el volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)        
+        #obtengo los expedientes de este volumen. Necesito el xpath
+        # de la lista de expedientes =  //*[@id="id del volumen"]/ul
+        volumen_id = find_link(j,10)
+        id_vol_anchor = volumen_id.get_attribute("id")
+        id_vol = re.sub("_anchor","",id_vol_anchor)
+        # creo el xpath de la lista
+        xpath_lista_exped= '//*[@id="' + id_vol + '"]/ul'
+        #ahora busco la lista de volumenes por el xpath
+        expedientes = find_xpath(xpath_lista_exped,10)
+        lista_exped = expedientes.text.split('\n')
+        #para cada expediente
+        for h in lista_exped:
+            #hago click en el primer elemento de los expedientes
+            time.sleep(2)
+            expediente = doble_clicks(h,1,1)
+            time.sleep(2)
+            #descargo el texto
+            texto = driver.find_element_by_id("texto")
+            #por ahora solo voy a meterlo en una lista.
+            texto_expediente = texto.text
+            Texto_Final_10.append(texto_expediente)
+        #salgo del volumen
+        time.sleep(2)
+        volumen = doble_clicks(j,1,1)
+        time.sleep(2)
+    #salgo del contenedor
+    print(i)
+    time.sleep(2)
+    cont = doble_clicks(i,1,1)
+    time.sleep(2)
+
+driver.quit()
+
+Texto_Total = Texto_Final + Texto_Final_2 + Texto_Final_3 + Texto_Final_4 + Texto_Final_5 + Texto_Final_6 + Texto_Final_7  + Texto_Final_8  + Texto_Final_9  + Texto_Final_10
+len(Texto_Total)
+
+dict = {'colA': Texto_Total}
+
+Texto = pd.DataFrame(dict)
+Texto.to_csv('Datos\Texto_raw.csv')
+Texto.head()
+
+
+Texto_Tierras = pd.DataFrame(
+    columns = ['agn', 'colonia', 'audiencia', 'ramo', 'contenedor', 'vol', 'expediente', 'nivel', 'volumen', 'productores', 'contenido']
+    )
+
+not_saved = []
+
+for i in Texto_Total:
+    try:
+        split_1 = i.split('\n')
+        split_2 = split_1[0].split('/')
+        replace = []
+        for h in range(1,len(split_1)):
+            puntos = split_1[h].find(':')
+            split_1[h] = split_1[h][puntos+1:]
+        values = {'agn': split_2[0], 'colonia': split_2[1], 'audiencia': split_2[2], 'ramo': split_2[3], 'contenedor': split_2[4], 'vol': split_2[5], 'expediente': split_1[1], 'nivel': split_1[2], 'volumen': split_1[3], 'productores': split_1[4], 'contenido': split_1[5]}
+        row = pd.Series(values)
+        Texto_Tierras = Texto_Tierras.append(row,ignore_index=True)
+    
+    except:
+        # print(i)
+        not_saved.append(i)
+
+len(not_saved)
+
+for i in not_saved:
+    print(i)
+
+#only entry with info is 0
+
+split_1 = not_saved[0].split('\n')
+split_2 = split_1[0].split('/')
+
+for h in range(1,len(split_1)):
+    puntos = split_1[h].find(':')
+    split_1[h] = split_1[h][puntos+1:]
+
+values = {'agn': split_2[0], 'colonia': split_2[1], 'audiencia': split_2[2], 'ramo': split_2[3], 'expediente': split_1[1], 'nivel': split_1[2], 'volumen': split_1[3], 'productores': split_1[4], 'contenido': split_1[5]}
+row = pd.Series(values)
+Texto_Tierras = Texto_Tierras.append(row,ignore_index=True)
+Texto_Tierras
+
