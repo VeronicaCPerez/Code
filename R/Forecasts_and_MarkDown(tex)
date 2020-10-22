@@ -1,0 +1,171 @@
+\documentclass{article}
+\usepackage{geometry}
+\usepackage{graphicx}
+
+
+ \geometry{
+ a4paper,
+ left=35mm,
+ right=35mm,
+ top=18mm,
+ }
+ 
+
+\title{Taller 1 Pronósticos}
+\author{ Luisa Melo \\ 201615646 \and Verónica Pérez \\ 201616610, \and Juliana Quigua \\ 201616815}
+\date{15 de Febrero de 2016}
+\providecommand{\keywords}[1]{\textbf{\textit{Key words:}} #1}
+
+\begin{document}
+
+\setkeys{Gin}{width=0.7\textwidth}
+\SweaveOpts{concordance=FALSE,echo=FALSE}
+
+\maketitle
+\section*{Pronósticos puntuales}
+
+\noindent
+
+1. Abra la base wages.xlsx y reporte cuántos missings y cuántos ceros hay en cada una de las variables.
+Pista: use las funciones sum(is.na(x)) y sum(x==0, na.rm=T)  anidadas en la función sapply.
+
+
+<<>>=
+library(readxl)
+library(tidyr)
+library(dplyr)
+library(Hmisc)
+library(plm)
+library(MASS)
+library(plotly)
+library(xtable)
+library(stargazer)
+
+wages <- read_excel("C:/Users/verop/OneDrive - Universidad de Los Andes/Universidad/2019-1/Pronosticos/Taller1/wages.xlsx")
+@
+\vspace{4mm}
+
+Tabla que describe los missings de cada variable
+<<>>=
+ sapply(wages, function (x) sum(is.na(x)),USE.NAMES = T)
+@
+\vspace{4mm}
+
+Tabla que describe cuántos ceros hay en cada una de las variables.
+
+<<>>=
+  sapply(wages, function (x) sum(x==0, na.rm=T),USE.NAMES = T)
+@
+
+\vspace{4mm}
+
+
+2. Guarde los datos de aquellas personas que no tienen missings y de aquellas que tienen en dos objetos
+diferentes. Presente las primeras tres filas de cada uno de estos objetos.
+
+
+
+<<xtable, results=tex>>=
+no_missings <- wages %>%
+  filter(!is.na(wage) & !is.na(id) & !is.na(exp) & !is.na(exp2) & !is.na(wks) & !is.na(bluecol) & !is.na(married) & !is.na(sex) & !is.na(ed))
+tabla1<- xtable(x=head(no_missings, n = 3),caption = "Observaciones sin missings")
+print(tabla1, caption.placement ="top")
+
+@
+
+<<xtable, results=tex>>=
+missings <- wages %>% #%>% nos permite seguir trabajando en esta base y aplicarle las funciones que pongamos luego
+  filter(is.na(wage)) 
+tabla2<-xtable(x =head(missings, n = 3),caption = "Observaciones con missings")
+print(tabla2, caption.placement ="top")
+
+@
+
+\vspace{4mm}
+
+3. Suponga que usted en una aseguradora, sabe que Salario : f(experiencia, educación, ...) y su objetivo es pronosticar el salario de aquellas personas que no lo reportaron para posteriormente evaluar su capacidad de endeudamiento. Plantee un modelo para esto y justifique la inclusión de cada una de las covariables que incluya.
+
+
+\vspace{4mm}
+\begin{center}
+\includegraphics{correxpsalario}
+
+\includegraphics{correducwage}
+\end{center}
+
+\vspace{4mm}
+<<height=2.5, width=4.5,fig=TRUE>>=
+  source("C:/Users/verop/OneDrive - Universidad de Los Andes/Universidad/2019-1/Pronosticos/Tema personalizado GGPLOT.R")
+
+
+ ggplot(data = no_missings, aes(x=wks, y=wage)) + 
+  geom_point(size=2, col="skyblue2") + geom_smooth(col="blue", method="loess") +
+  ggtitle("salario vs semanas de trabajo") +
+  labs(y="Salario", x="Semanas de trabajo") +
+  guides(fill=guide_legend("")) + tema_personalizado
+@
+\vspace{4mm}
+
+
+4. Estime el modelo que planteó por MCO y presente los coeficientes y sus errores estándar. Además, presente e interprete desde una perspectiva de pronósticos el R2 y el R¯2.
+ 
+%¿porque la regresión no sale acá)
+\begin{center}
+
+<<results=tex>>=
+modelo1<-lm(data = no_missings,wage~exp + exp2+ wks + I(wks^2) + bluecol + married + sex + ed + I(ed^2))
+stargazer::stargazer(modelo1, header = F)
+@
+
+\end{center}
+
+\pagebreak
+El R2 representa cómo se comporta nuestro modelo pronóstico frente a un pronóstico ingenuo
+
+
+5. Sin hacer simulaciones, pronostique el salario de las personas que no lo reportaron. Presente sus
+resultados en forma de gráfico de dispersión con la experiencia en el eje horizontal y el salario pronosticado
+en el eje vertical.
+
+<<>>=
+coeficientes <- modelo1$coefficients
+
+noreporta<-wages %>%
+  filter(is.na(wage))%>%
+  select(-wage)%>%
+  mutate(wks2=wks^2,ed2=ed^2) 
+
+wagepred  <- noreporta%>%
+    mutate(wagepred=(exp*coeficientes[2]+exp2*coeficientes[3]+exp2*coeficientes[4]+
+                       wks*coeficientes[4]+wks2*coeficientes[5]+bluecol*coeficientes[6]+
+                       married*coeficientes[7]+sex*coeficientes[8]+ed*coeficientes[9]+ed2*coeficientes[10]))
+
+@
+
+<<fig=TRUE>>=
+  ggplot(data = wagepred, aes(x=exp, y=wagepred)) +
+  geom_point(size=2, col="skyblue2") + geom_smooth(col="blue", method="loess") +
+  ggtitle("Correlación entre el salario predicho y la experiencia") +
+  labs(y="Salario predichi", x="Experiencia") +
+  guides(fill=guide_legend("")) + tema_personalizado
+
+@
+
+
+\section*{Pronósticos de intervalo y densidad}
+
+Para el desarrollo de esta sección de supondrá que el salario está dado por el modelo que usted planteó en la
+sección anterior y ahora se va a concentrar en un individuo en particular. Considere el individuo identificado
+por id=1226.
+
+
+1. Muestre las carácteristicas y el salario pronosticado del individuo identificado por el id=1226.
+
+<<xtable, results=tex>>=
+individuo<-wages[1226,]
+individuo1226<- xtable(x=individuo,caption = "Características individuo 1226")
+print(individuo1226, caption.placement ="top")
+
+wagepredind<-xtable(x=modelo7$fitted.values[1226],caption = "Salario predicho individuo 1226")
+
+\end{document}
