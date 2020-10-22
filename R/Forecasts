@@ -1,0 +1,346 @@
+library(readxl)
+library(ggplot2)
+library(forecast)
+library(readxl)
+library(forecast)
+library(astsa)
+library(car)
+library(tidyr)
+library(dplyr)
+library(splusTimeSeries) 
+library(broom)
+library(stats)
+library(goftest)
+library(normtest)
+library(urca)
+library(vars)
+
+# Punto 1 -----------------------------------------------------------------
+
+inflacion<- ts(read_excel("INF_USA.xls",col_names =TRUE, sheet ="FRED Graph",range = "B12:B506"), 
+               names=list("serie"), end = c(2019, 2), frequency = 12)
+
+exp_inflacion<- ts(read_excel("INF_USA.xls",col_names =TRUE, sheet ="FRED Graph",range = "C12:C506"), 
+                   names=list("serie"), end = c(2019, 2), frequency = 12)
+
+plot(inflacion)
+lines(exp_inflacion, col= "red")
+
+INF<- window(inflacion, start=c(1983,1))
+EXP<-window(exp_inflacion, start=c(1983,1))
+plot(INF)
+plot(EXP)
+
+# Punto 2 -----------------------------------------------------------------
+
+#SELECCIÃN
+
+#Desde 1983; por cambio estructural
+
+ggseasonplot(INF, polar= T)
+
+Minf<- tslm(INF~season-1)
+linearHypothesis(Minf, c("season1=season2",
+                          "season1=season3",
+                          "season1=season4",
+                          "season1=season5",
+                          "season1=season6",
+                          "season1=season7",
+                          "season1=season8",
+                          "season1=season9",
+                          "season1=season10",
+                          "season1=season11",
+                          "season1=season12"))
+
+T = length(INF)
+t = seq(1:(T))
+tmexp = exp(-t)
+
+
+rbind(glance(tslm(INF~trend)),
+      glance(tslm(INF~trend+I(trend^2))),
+      glance(tslm(INF~trend+tmexp)),
+      glance(tslm(INF~trend+I(trend^2)+season-1)))
+
+
+# PUNTO 4 -----------------------------------------------------------------
+
+M_i1<-tslm(INF~trend+I(trend^2)+season-1)
+summary(M_i1)
+ajb.norm.test(M_i1$residuals)
+
+#se testea haciendo pruebas de ruido blanco sobre los residuos
+#Se rechaza Ho
+
+# Residuales
+  Box.test(M_i1$residuals, type = "Ljung-Box")
+#P_valor=7.049e-05 Se rechaza Ho.
+#Residuos no son ruido blanco
+checkresiduals(M_i1)
+acf2(M_i1$residuals) #AR(1)
+#No es ruido blanco
+auto.arima(INF, stepwise= F, approx = F)
+
+
+estacionalidad_r<-seasonaldummy(INF) #Excluye la Ãºltima dummy. crea dummy para cada obs
+estacionalidad_r<-cbind(estacionalidad_r, Dec=apply(estacionalidad_r, MARGIN = 1, function(x){1-sum(x)}))
+tsxreg<-seasonaldummy(INF) 
+
+#tendencia
+tendencia_r<-cbind(t=1:length(INF), t2=(1:length(INF))^2)
+tsxreg<-cbind(tendencia_r, estacionalidad_r)
+
+# Modelo
+MP<-Arima(INF, order = c(4,1,1), xreg = tsxreg)
+
+
+#sin intercepto por include.mean = F
+summary(M_INF)
+
+# 1-paso adelante con ventana mÃ³vil
+E<- window(EXP, start = c(2009,1))
+INF2<-window(INF, start=c(2009, 1))
+e_pron_E<-INF2-E
+
+#ventana movil sobre la y y sobre las x
+e_pron_MP<-NULL  #restarle al observado lo que predecimos
+for (i in 312:(length(INF)-1)){
+  error_temp<-INF[i+1]-as.numeric(forecast(Arima(ts(INF[1:(i)], 
+                                                   start=c(1983,1),frequency = 12),
+                                                   order=c(4,1,1),xreg=tendencia_r[1:(i),],
+                                                   include.constant = F),h=1, 
+                                             xreg=t(tendencia_r[(i)+1,]))$mean)
+  e_pron_MP<-c(e_pron_MP, error_temp)
+  rm("error_temp")
+}
+e_pron_MP<- ts(e_pron_MP,start = c(2009,1),frequency = 12)
+pron_MP<-window(INF-e_pron_MP, start=c(2009,1))
+
+#MODELO DE CA
+
+CA<-Arima(INF, order = c(0,1,0))
+
+fun_for<-function(x, h=h){
+  forecast(Arima(y=x, order=c(0,1,0), include.drift=T), h=h)
+} 
+
+
+# 1-paso adelante con ventana mÃ³vil
+
+e_pron_CA<-tsCV(INF, fun_for, h=1) #tsCV-> saca los errores de pronostico tantos pasos adelante, los datos, la funcion y el nÃºmero de pasp
+e_pron_CA<-ts(e_pron_CA, start=c(1983,1),end=c(2019,2), frequency = 12)
+pron_CA<-window(INF-e_pron_CA, start=c(2009,1))
+e_pron_CA<-window(e_pron_CA, start=c(2009,1))
+
+
+#MP Y E
+  dif1 <- e_pron_MP - e_pron_E
+  Box.test(dif1, type="Ljung-Box") 
+  #RHO ESO NO ES ESTACIONARIO.
+  plot(ts(dif1, start=c(2004,1), frequency = 12), main="Diferencial")
+  
+  acf2(dif1) 
+  
+  dm.test(e_pron_MP, e_pron_E, alternative = "less", h=1, power = 1)
+  dm.test(e_pron_MP, e_pron_E, alternative = "less", h=1, power = 2)
+  dm.test(e_pron_MP, e_pron_E, alternative = "less", h=1, power = 4)
+  dm.test(e_pron_MP, e_pron_E, alternative = "less", h=1, power = 8)
+  
+  M1<-lm(INF2[1:length(e_pron_MP)]~ e_pron_MP+e_pron_E-1)
+  summary(M1)
+  
+  linearHypothesis(M1, c("e_pron_MP=1", "e_pron_E=0"))
+  #Rho entonces el coeficiente no es 1 y el otro 0
+  linearHypothesis(M1, c("e_pron_MP=0", "e_pron_E=1"))
+  #Rho entonces el coeficiente no es 1 y el otro 0
+  #Vale la pena combinar.
+
+
+#MP Y AC
+  dif2 <- e_pron_MP - e_pron_CA
+  Box.test(dif2, type="Ljung-Box") 
+  
+  #NRHO AL 1% DE SIGNIFICANCIA
+  
+  plot(ts(dif2, start=c(2004,1), frequency = 12), main="Diferencial")
+  
+  acf2(dif2) 
+  
+  dm.test(e_pron_MP, e_pron_CA, alternative = "less", h=1, power = 1)
+  dm.test(e_pron_MP, e_pron_CA, alternative = "less", h=1, power = 2)
+  dm.test(e_pron_MP, e_pron_CA, alternative = "less", h=1, power = 4)
+  dm.test(e_pron_MP, e_pron_CA, alternative = "less", h=1, power = 8)
+  #en todas no se rechaza. Que el modelo propuesto es mejor que la caminata aleatoria
+  
+  M2<-lm(INF2[1:length(e_pron_MP)]~ e_pron_MP+e_pron_CA-1)
+  summary(M2)
+  
+  linearHypothesis(M2, c("e_pron_MP=1", "e_pron_CA=0")) #si esto se cumple mi modelo 1 ya tiene la info del modelo 2
+  #norechazo Ho entonces el modelo 1 tiene toda la info del modelo 2
+  linearHypothesis(M2, c("e_pron_MP=0", "e_pron_CA=1")) #NO
+  #RHo entonces el modelo 2 no tiene toda la ifnor del modelo 1
+  
+  #la gente no solo tiene acceso a los datos sino su experiencia e info privilegiada
+  
+  
+#E Y AC
+  dif3 <- e_pron_CA - e_pron_E
+  Box.test(dif3, type="Ljung-Box") 
+  
+  #NRHO AL 1% DE SIGNIFICANCIA, ES RUIDO BLANCO
+  
+  acf2(dif3) 
+  
+  dm.test(e_pron_E, e_pron_CA, alternative = "less", h=1, power = 1)
+  dm.test(e_pron_E, e_pron_CA, alternative = "less", h=1, power = 2)
+  dm.test(e_pron_E, e_pron_CA, alternative = "less", h=1, power = 4)
+  dm.test(e_pron_E, e_pron_CA, alternative = "less", h=1, power = 8)
+  #en todas no se rechaza. Que el modelo propuesto es mejor que la caminata aleatoria
+  
+  M3<-lm(INF2[1:length(e_pron_E)]~ e_pron_E+e_pron_CA-1)
+  summary(M3)
+  
+  linearHypothesis(M3, c("e_pron_E=1", "e_pron_CA=0")) #si esto se cumple mi modelo 1 ya tiene la info del modelo 2
+  #RHOE Ho entonces el modelo E no tiene toda la info del modelo 
+  linearHypothesis(M3, c("e_pron_E=0", "e_pron_CA=1"))
+  #RHo entonces el modelo 2 no tiene toda la ifnor del modelo 1
+  
+#solo vale la pena combinar el modelo MP con el de E ya que el MP tiene toda la infor del modelo de caminata aleatoria
+  
+  
+
+# Punto 7 -----------------------------------------------------------------
+
+PI<-window(0.33*(E+pron_CA+pron_MP), start=c(2009, 1))
+
+e_pron_MP<-NULL
+  
+for (i in 20:length(INF)) {
+    error_temp<-INF[i+1]-as.numeric(forecast(Arima(ts(INF[1:(i)], 
+                                             start=c(1983,1),frequency = 12),
+                                             order=c(4,1,1),xreg=tendencia_r[1:(i),],
+                                             include.constant = F),h=1, 
+                                             xreg=t(tendencia_r[(i)+1,]))$mean)
+    e_pron_MP<-c(e_pron_MP, error_temp)
+    rm("error_temp")
+}
+
+e_pron_MP<-ts(e_pron_MP,start = c(2009,1),frequency = 12)
+  
+
+# MODELOS MULTIVARIADOS ---------------------------------------------------
+
+# PARTE 2 -----------------------------------------------------------------
+
+remove(list=ls())
+list.files()
+
+library(urca)
+library(forecast)
+library(vars)
+library(lmtest)
+
+#PUNTO 1
+
+tasa_empleo<- ts(read_excel("EMP_PIB.xlsx", col_names =TRUE, sheet ="Hoja1",range = "C3:C75"), 
+                 names=list("Empleo"), start = c(2001, 1), frequency = 4)
+
+PIB<- ts(read_excel("EMP_PIB.xlsx",col_names =F, sheet ="Hoja1",range = "D20:D75"), 
+         names=list("PIB"), start = c(2005, 1), frequency = 4)
+
+plot(tasa_empleo)
+
+plot(PIB, col= "red")
+
+
+#PUNTO 2
+
+#PIB
+
+#Prueba de DF
+
+summary(ur.df(PIB)) 
+
+#Ho: Serie no es estacionaria. Tiene raiz unitaria
+#en este caso se rechaza al 10  y 5% lo cual implica que la serie es estacionaria
+#En este caso no se rechaza al 1%
+
+acf2(PIB)
+#no parece estacionaria
+
+#EMPLEO
+
+summary(ur.df(tasa_empleo)) 
+#Se rechaza al 1%. LA serie es estacionaria. No tiene raiz unitaria. 
+
+acf2(tasa_empleo)
+#no parece estacionaria
+
+#PUNTO 3: Solo para el PIB
+
+
+ggseasonplot(PIB, polar= F) #PARECE HABER ESTACIONALIDAD
+
+Minf<- tslm(PIB~season-1)
+linearHypothesis(Minf, c("season1=season2",
+                         "season1=season3",
+                         "season1=season4"
+))
+#No se rechaza Ho. No hay estacionalidad.
+
+#Â¿hay tendencia?
+rbind(glance(tslm(PIB~trend)),
+      glance(tslm(PIB~trend+I(trend^2))),
+      glance(tslm(PIB~trend+I(trend^2)+season-1)))
+#ES MEJOR TENDENCIA CUADRATICA, pero por pasrsimonia escogemos tendencia lineal
+
+summary(ur.df(tslm(PIB[,1]~I(trend))$residuals))
+#el PIB es estacionario con tendencia lineal
+M_pib<-tslm(PIB~trend)
+summary(M_pib)
+Box.test(M_pib$residuals)
+#no se rechaza Ho. Son ruido blanco y por ende son estacionarios.
+
+acf2(M_pib$residuals)
+
+
+# Punto 5 -----------------------------------------------------------------
+
+
+grangertest(VAR.data[,"pib"]~VAR.data[,"empleo"], order=5)
+grangertest(VAR.data[,"empleo"]~VAR.data[,"pib"], order=5)
+
+
+#PIB primero y luego inflacion
+
+plot(PIB)
+lines(tasa_empleo) 
+
+VAR.data<-cbind(P=window(M_pib$residuals, start=c(2005,1)), 
+                TE=window(tasa_empleo, start=c(2005,1)))
+
+VARselect(VAR.data, type="none")
+
+VAR.1<-VAR(VAR.data, p=5, type="const")
+
+# PronÃ³sticos: p=9
+forecast(VAR.1,h=12)$forecast$P$mean                                        #
+forecast(VAR.1,h=12)$forecast$TE$mean
+
+
+# Punto 8 -----------------------------------------------------------------
+
+irf.11<-irf(VAR.1, impulse="P",response="P", n.ahead=12, cumulative=F)
+irf.22<-irf(VAR.1, impulse="TE",response="TE", n.ahead=12, cumulative=F)
+irf.12<-irf(VAR.1, impulse="P",response="TE", n.ahead=12, cumulative=F)
+irf.21<-irf(VAR.1, impulse="TE",response="P", n.ahead=12, cumulative=F)
+
+# GrÃ¡ficos                                                                #
+plot(irf.11)
+plot(irf.22)
+plot(irf.12)
+plot(irf.21)
+
+# Punto 9 -----------------------------------------------------------------
+
+plot(fevd(VAR.1, n.ahead=2))
