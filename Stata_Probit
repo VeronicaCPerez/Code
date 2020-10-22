@@ -1,0 +1,66 @@
+*Probit and Heckman 
+
+use chicken.dta
+
+duplicates report restaurant year
+
+xtset restaurant year
+
+xtprobit complain age grade south tenure genderm burger chicken, re
+outreg2 using "reg1f.tex",replace tex(fragment) ///
+			title("Tabla 1: Estimación Probit de Efectos aleatorios") 
+
+margins, dydx(*) atmeans predict(pu0)
+outreg2 using "MF1f.tex",replace tex(fragment) ///
+			title("Tabla 2: Efectos marginales en la media") 
+
+		
+xtdescribe
+				
+//Point2
+
+use punto2.dta,clear
+
+
+//MCO
+
+reg y2 sexo edad PGA nivel 
+outreg2 using "reg2cMCO.tex",replace tex(fragment) ///
+			title("Tabla 3: Regresión por MCO, Heckman y Heckman MV") 
+//heckman
+
+probit d sexo edad PGA prop 
+		
+		* Paso 2: Obtener la probabilidad predicha
+		predict wgamma, xb
+		sum wgamma
+		
+		* Paso 3: Construir el Radio de Mills gorro
+		gen pdf = normalden(wgamma) 
+		/*	generar densidad													*/
+		
+		gen cdf = normal(wgamma) 
+		/*	generar acumulada													*/
+		
+		gen IMR = pdf/cdf 
+		/*	generar inverso de la razón de mills								*/
+		
+		* Paso 4: Realizar la regresión por MCO, incluyendo el radio de Mills
+		reg y2 sexo edad PGA nivel IMR
+		outreg2 using "reg2cMCO.tex", dec(3) tex(fragment)
+		/* Note que IMR no significativo. No necesariamente se debe a que no 
+		haya selección. Sabemos que los errores estandar de la estimación son
+		inadecuados porque se usa parámetros estimados de una priemra etapa. 
+		De manera que la variable IMR NO es una variable aleatoria				*/
+		 tw sc IMR wgamma
+		
+		
+//heckam MV
+
+heckman y2 sexo edad PGA nivel, 										///
+		select(d=sexo edad PGA prop) 
+		
+		
+outreg2 using "reg2cMCO.tex", dec(3) tex(fragment)
+
+
