@@ -1,0 +1,78 @@
+clear
+set more off
+
+**Dir
+global dir "Applications\codes" 	
+	
+*Server
+if "`c(username)'"=="vc.perez" {
+
+	global rootdir "C:\Users\\`c(username)'\Dropbox\\${dir}" 
+	cd "${rootdir}"
+	
+	}
+	
+*personal
+else if "`c(username)'"=="veron"{
+
+	global rootdir "D:\Dropbox\\`c(username)'\\${dir}"
+	cd "${rootdir}"
+	
+	}
+
+*Database
+********
+import delimited "Saber11_sample.csv", clear encoding("utf-8") stringcols(1) 
+
+*Problem: I don't want to have strange characters in my educational variables so
+
+global educ "fami_educacionpadre fami_educacionmadre"
+
+foreach x of global educ {
+	replace `x' = regexr(`x',"á","a")
+	replace `x' = regexr(`x',"é","e")
+	replace `x' = regexr(`x',"í","i")
+	replace `x' = regexr(`x',"ó","o")
+	replace `x' = regexr(`x',"ú","u")
+}
+*gen a variable = 1 if one of the parents had access to tertiary education
+gen high_educ_parent = (regexm(fami_educacionpadre,"profesional|tecno")|regexm(fami_educacionmadre,"profesional|tecno"))
+
+
+*rename
+rename (punt_matematicas punt_lectura_critica punt_c_naturales punt_sociales_ciudadanas punt_ingles cole_codigo_icfes)(math reading biology social_science english school_code)
+
+global controls "reading biology social_science english"
+	
+
+*graphs
+	foreach x of global controls {
+		scatter math `x', graphregion(color(white)) name("`x'",replace) nodraw 
+	}
+	graph combine $controls, graphregion(color(white))
+	graph export "results\scatters_combined.png",replace
+	
+
+*regressions
+reg math $controls , r
+outreg2 using "results\reg.tex",tex(frag) ///
+addtext(School FE, No, City FE, No) nocons replace
+
+reg math $controls high_educ_parent, r
+outreg2 using "results\reg.tex",tex(frag) ///
+addtext(School FE, No, City FE, No) nocons append
+
+*fe
+reghdfe math $controls high_educ_parent, absorb(school_code) vce(robust)
+outreg2 using "results\reg.tex",tex(frag) ///
+addtext(School FE, Yes, City FE, No) nocons append
+
+reghdfe math $controls high_educ_parent, absorb(school_code estu_depto_presentacion) vce(robust)
+outreg2 using "results\reg.tex",tex(frag) ///
+addtext(School FE, Yes, City FE, Yes) nocons append
+	
+	
+	
+	
+	
+	
