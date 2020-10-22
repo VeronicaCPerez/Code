@@ -1,0 +1,148 @@
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(maptools)
+library(rgdal)
+library(sp)
+library(tmap)
+
+
+
+tema_personalizado<-theme(axis.title = element_text(size = rel(0.8)), 
+                          axis.title.x = element_text(face = "bold"),
+                          axis.title.y = element_text(face="bold"),
+                          panel.background =element_rect(fill = "white"),
+                          legend.background = element_blank(),
+                          legend.box.background = element_rect(colour = "black", linetype = "dashed"),
+                          legend.position="right",
+                          legend.key = element_rect(colour = "grey60"),
+                          panel.border = element_rect(fill = NA, colour = "grey30"), 
+                          panel.grid.major = element_line(colour = "grey70", size = 0.2,linetype = "dotted"), 
+                          panel.grid.minor = element_line(colour = "grey58", size = 0.5, linetype = "dotted"), 
+                          strip.background = element_rect(fill = "grey80", colour = "grey50",size = 0.2,linetype = "dotted"),
+                          plot.title = element_text(hjust = 0.5, face = "bold"),
+                          plot.subtitle =element_text(hjust = 0.5,face = "bold", colour = "grey20"))
+
+
+#Datos
+
+
+
+plebiscito <- read.csv(file = "taller_3.csv",sep = ",",stringsAsFactors = F,encoding = "UTF-8") %>%
+    separate(location,into = c("dpto","mcpio"),sep = "_") %>%
+        spread(key = var,value = values)
+
+plebiscito2 <- read.csv(file = "taller_3.csv",sep = ",",stringsAsFactors = F,encoding = "UTF-8") %>%
+  separate(location,into = c("dpto","mcpio"),sep = "_") 
+
+#GanÃ³ el si o el no
+
+pleb1 <- plebiscito2 %>% 
+  group_by(var)%>%
+  summarise(votacion=sum(values)) %>%
+  spread(key= var, value = votacion) %>%
+  mutate(si = votos_si/total_obs, no = votos_no/total_obs, nulos = votos_nulos/total_obs, "no marcados" = votos_nomarcados/total_obs) %>%
+  gather(key=votacion, value= porcentaje, 8:11) %>%
+  select(votacion, porcentaje)
+
+
+
+graph1 <- pleb1 %>%
+    ggplot(aes(y=porcentaje, x=reorder(votacion,-porcentaje)))+
+    geom_bar(position="stack", stat = "identity", fill="skyblue1") +
+    ggtitle("Votacion en el plebiscito", subtitle = "Total en Colombia") +
+    labs(y="porcentaje", x="votos") +
+    guides(fill=guide_legend("")) + tema_personalizado 
+
+#Mapa de como se distribuyÃ³ la votaciÃ³n en el paÃ­s/poblaciÃ³n (participaciÃ³n)
+p1 <-plebiscito %>% 
+  group_by(dpto) %>%
+    summarise(pobtotal = sum(total_hab),votos = sum(total_obs)) %>%
+  group_by(dpto) %>%
+    summarise(part = votos/pobtotal) %>%
+  spread(key = dpto, value = part) %>%
+  mutate("SANTAFE DE BOGOTA D.C" = 0.4633639) %>%
+  mutate("NORTE DE SANTANDER" = 0.4030631) %>%
+  mutate("VALLE DEL CAUCA" = 0.361234) %>%
+  gather(key = dpto,value = part) %>%
+  filter(!dpto=="NORTE DE SAN") %>%
+  filter(!dpto=="VALLE") %>%
+  filter(!dpto=="BOGOTA D.C.") %>%
+  mutate(participacion = part, departamento =dpto) 
+
+table1 <- p1 %>%
+  select(participacion,departamento)
+
+
+  deptos<-readOGR("shape_depto", "depto", encoding = "UTF-8")
+
+deptosp1<-merge(deptos, p1, by.x=c("NOMBRE_DPT"), by.y=c("dpto"))
+
+tm_shape(deptosp1)+
+  tm_polygons("part", style="quantile", n=4, title="%",labels = c("10-24.6","24.6-34.6","34.6-41.3","41.3-49")) + 
+  tm_layout(title = "ParticipaciÃ³n en el plebiscito",
+    bg.color = "white", frame = T,title.size = 0.95,
+    title.position = c("center","top"),inner.margins = 0.06, fontface = "bold") +
+  
+  
+
+#DistribuciÃ³n de votos por dpto
+
+plebis2 <- plebiscito %>% 
+  group_by(dpto) %>%
+  summarise(votos = sum(total_obs),votossi = sum(votos_si), 
+            votosno = sum(votos_no), votosnulos = sum(votos_nulos, 
+                  votosnomarcados=sum(votos_nomarcados))) %>%
+  mutate(si = votossi/votos, no = votosno/votos, nulos = votosnulos/votos) %>%
+  group_by(dpto) %>%
+  gather(key = votacion, value = porcentaje, 6:8)
+
+
+graph3 <- plebis2 %>%
+  ggplot(aes(y=porcentaje, x=dpto, fill=votacion))+
+  geom_bar(position="stack", stat = "identity") +
+  ggtitle("DistribuciÃ³n de la votaciÃ³n en el Plebiscito", 
+          subtitle = "Por departamento") +
+  labs(y="porcentaje", x="departamento") +
+  guides(fill=guide_legend("")) + tema_personalizado + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+plebis3 <- plebiscito %>% 
+  group_by(dpto) %>%
+  summarise(votos = sum(total_obs),votossi = sum(votos_si), 
+            votosno = sum(votos_no), votosnulos = sum(votos_nulos, 
+                                                      votosnomarcados=sum(votos_nomarcados))) %>%
+  mutate(si = votossi/votos, no = votosno/votos, nulos = votosnulos/votos)
+
+plebis3$gana<-ifelse(plebis3$si>0.5,1,0)
+  
+plebis4 <- plebis3 %>%
+  select(dpto,gana) %>%
+  spread(key = dpto, value = gana) %>%
+  mutate("SANTAFE DE BOGOTA D.C" = 1) %>%
+  mutate("NORTE DE SANTANDER" = 0) %>%
+  mutate("VALLE DEL CAUCA" = 1) %>%
+  gather(key = dpto,value = gana) %>%
+  filter(!dpto=="NORTE DE SAN") %>%
+  filter(!dpto=="VALLE") %>%
+  filter(!dpto=="BOGOTA D.C.")
+#1 es que ganÃ³ el si
+deptosm2<-merge(deptos, plebis4, by.x=c("NOMBRE_DPT"), by.y=c("dpto"))
+
+tm_shape(deptosm2)+
+  tm_polygons("gana", n=2, title="",labels = c("no","si")) + 
+  tm_layout(title = "DistribuciÃ³n de la votaciÃ³n",
+            bg.color = "white", frame = T,title.size = 0.75,
+            title.position = c("center","top"),
+            inner.margins = 0.07, fontface = "bold",legend.frame = T)
+ 
+
+
+windows()
+tm_shape(deptosm3)+
+  tm_polygons("gana", n=2, title="Votos mayorÃ­a",labels = c("no","si")) + 
+  tm_layout(title = "DistribuciÃ³n de la votaciÃ³n",
+            bg.color = "white", frame = T,
+            title.position = c("center","top"),
+            fontface = "bold",legend.frame = T,legend.width=0.3,legend.height = 0.3) +
+  tm_bubbles("part", title.size="ParticipaciÃ³n",col = "pink")
