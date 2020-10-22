@@ -1,0 +1,181 @@
+
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+punto1<- read.csv("Taller_2_punto_1.csv", sep=",", encoding = "UTF-8")
+
+punto1tasa<-punto1 %>%
+  mutate(tnat=(nacimiento/poblacion)*1000) %>%
+  group_by(ano)
+
+#promedio del dpto por aÃ±o
+windows()
+punto1tasa %>%
+  ggplot(aes(y=tnat, x = ano, group=ano)) +
+  geom_boxplot(outlier.color = "steelblue3") +
+  coord_flip() + theme_bw() +
+  ggtitle("EvoluciÃ³n de la tasa de natalidad a nivel departamental") +
+  labs(x="AÃ±o", y="Nacimiento por 1.000 habitantes", caption="Fuente: DANE") +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5),
+        plot.subtitle =element_text(hjust = 0.5),
+        strip.background = element_rect(fill="white")) +
+  scale_x_continuous(breaks = seq(1998,2017))
+
+
+# Punto 2 ------------------------------------------------------------------
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(RColorBrewer)
+
+punto2<- read.csv("Taller_2_punto_2.csv", sep=",", encoding = "UTF-8")
+  
+ #Dpto donde mÃ¡s se incauta droga
+
+
+punto2a <- punto2%>% 
+  filter(!is.na(CODIGO_DANE)) %>%
+  group_by(DEPTO_HECHO) %>%
+  summarise(droga = sum(Droga.Incautada..Cantidad))
+
+windows() 
+punto2a %>%
+  ggplot(aes(y=droga, x = DEPTO_HECHO)) +
+  geom_bar(position="stack", stat = "identity", col = "lightblue", fill ="lightblue2") +
+  ggtitle("Cantidad de Droga Incautada", subtitle = "Por departamento") +
+  labs(y="Cantidad de droga", x="") +
+  guides(fill=guide_legend("")) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+#que no salga en notacion cientÃ­fica
+
+
+
+#b 2. Â¿CuÃ¡l es el dÃ­a de la semana con el mayor promedio de incautaciÃ³n de droga?
+punto2b <- punto2 %>%
+  filter(!is.na(CODIGO_DANE)) %>%
+  group_by(DIA_SEMANA) %>%
+  summarise(droga = mean(Droga.Incautada..Cantidad))
+
+windows()
+punto2b %>%
+  ggplot(aes(y=droga, x = DIA_SEMANA)) +
+  geom_bar(position="stack", stat = "identity", col = "lightblue", fill ="lightblue2") +
+  ggtitle("Cantidad promedio de Droga Incautada", subtitle = "Por dÃ­a de la semana") +
+  labs(y="Cantidad de droga", x="") +
+  guides(fill=guide_legend(""))
+
+
+
+#c Â¿CuÃ¡l ha sido la tendencia mensual en la incautaciÃ³n de drogras en el aÃ±o 2018 a nivel agregado?
+
+
+punto2c <-punto2 %>%
+  filter(!is.na(CODIGO_DANE)) %>%
+  separate(col = FECHA_HECHO, sep="/", into = c("mes","dia","aÃ±o")) 
+  
+punto2c$mes <- as.numeric(as.character(punto2c$mes))
+
+#solo la linea
+windows()
+punto2c %>%
+  ggplot(aes(x=mes, y=Droga.Incautada..Cantidad)) +
+  geom_smooth(col="red", method="lm") +
+  ggtitle("Tendencia cantidad de Droga Incautada", subtitle = "Por mes") +
+  labs(y="Cantidad de droga", x="") +
+  guides(fill=guide_legend("")) +scale_x_continuous(breaks = seq(1,9))
+
+#con grÃ¡fico de dispersion
+windows()
+punto2c %>%
+  ggplot(aes(x=mes, y=Droga.Incautada..Cantidad)) + 
+geom_point(aes(col=mes), size=2, shape=21, show.legend = F,
+           position = position_jitter(width = 0.5))+
+  geom_smooth(col="red", method="lm") +
+  ggtitle("Tendencia cantidad de Droga Incautada", subtitle = "Por mes") +
+  labs(y="Cantidad de droga", x="") +
+  guides(fill=guide_legend("")) +scale_x_continuous(breaks = seq(1,9)) +ylim(0,250)
+
+
+
+#d distribuciÃ³n segun clase bien
+
+#dispersiÃ³n  
+windows()
+punto2 %>%
+  filter(!is.na(CODIGO_DANE)) %>%
+  ggplot(aes(x=Droga.Incautada..Cantidad, y=CLASE_BIEN)) +
+  geom_point(aes(col=CLASE_BIEN), size=2, shape=21, show.legend = F,
+             position = position_jitter(width = 0.9))+
+  ggtitle("DistribuciÃ³n IncautaciÃ³n", subtitle = "Por tipo de droga") +
+  labs(y="tipo de droga", x="cantidad") + 
+  guides(fill=guide_legend("")) 
+
+#barras
+windows()
+punto2 %>%
+  filter(!is.na(CODIGO_DANE)) %>%
+  group_by(CLASE_BIEN) %>%
+  summarise(droga=sum(Droga.Incautada..Cantidad)) %>%
+  ggplot(aes(x=CLASE_BIEN, y=droga)) +
+  geom_bar(position="stack", stat = "identity", col = "lightblue", fill ="lightblue2") +
+  ggtitle("Cantidad de Droga Incautada", subtitle = "Por tipo de droga incautada") +
+  labs(y="Cantidad de droga", x="Tipo de droga") +
+  guides(fill=guide_legend(""))
+
+
+
+
+# Punto3 ------------------------------------------------------------------
+
+
+
+tema_personalizado<-theme(axis.title = element_text(size = rel(0.8)), 
+                          axis.title.x = element_text(face = "bold"),
+                          axis.title.y = element_text(face="bold"),
+                          panel.background =element_rect(fill = "white"),
+                          legend.background = element_blank(),
+                          legend.box.background = element_rect(colour = "black", linetype = "dashed"),
+                          legend.position="right",
+                          legend.key = element_rect(colour = "grey60"),
+                          panel.border = element_rect(fill = NA, colour = "grey30"), 
+                          panel.grid.major = element_line(colour = "grey70", size = 0.2,linetype = "dotted"), 
+                          panel.grid.minor = element_line(colour = "grey58", size = 0.5, linetype = "dotted"), 
+                          strip.background = element_rect(fill = "grey80", colour = "grey50",size = 0.2,linetype = "dotted"),
+                          plot.title = element_text(hjust = 0.5, face = "bold"),
+                          plot.subtitle =element_text(hjust = 0.5,face = "bold", colour = "grey20")
+                          )
+
+punto2_grafi1 <- punto2 %>%
+  filter(!is.na(CODIGO_DANE)) %>% 
+  separate(col = FECHA_HECHO, sep="/", into = c("mes","dia","aÃ±o")) %>%
+  group_by(ZONA, CLASE_BIEN) %>%
+  summarise(droga = mean(Droga.Incautada..Cantidad))
+  
+windows()
+  punto2_grafi1 %>%
+    ggplot(aes(y=droga, x=ZONA, fill=CLASE_BIEN))+
+    geom_bar(position="stack", stat = "identity") +
+  ggtitle("Droga incautada en promedio Colombia", subtitle = "Por zona") +
+  labs(y="Droga Incautada", x="mes") +
+  guides(fill=guide_legend("")) + tema_personalizado
+
+#En este grÃ¡fico se puede observar que tanto en la zona rural como en la urbana 
+#la cocaina es la droga mÃ¡s incautada
+
+
+
+
+punto2_grafi2 <- punto2 %>%
+  filter(!is.na(CODIGO_DANE)) %>% 
+  separate(col = FECHA_HECHO, sep="/", into = c("mes","dia","aÃ±o")) %>%
+  group_by(mes, CLASE_BIEN) %>%
+  summarise(droga = mean(Droga.Incautada..Cantidad))
+
+windows()
+punto2_grafi2 %>%
+  ggplot(aes(y=droga, x=mes, fill=CLASE_BIEN))+
+  geom_bar(position="stack", stat = "identity") +
+  ggtitle("Tipo de Droga incautada", subtitle = "Por meses") +
+  labs(y="Droga Incautada", x="mes") +
+  guides(fill=guide_legend("")) + tema_personalizado
