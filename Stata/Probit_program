@@ -1,0 +1,27 @@
+use "female_work_13", clear	
+	
+/* Manually program and estimate with MV using the assumption that the model error follows a normal standardized distribution.
+	
+	Model: fem_work fem_educ male_educ kids other_inc
+
+*) Define the program
+	cap program drop miprobit
+	program define miprobit
+		args lnf mtheta 
+		quietly replace `lnf'=ln(normal(`mtheta'))*$ML_y1 + 			///
+			ln( 1-normal(`mtheta'))*(1-$ML_y1)		
+	end
+	
+	*) Define de model
+	ml model lf miprobit (fem_work=fem_educ male_educ i.kids other_inc) 
+		*lf: linear form
+		*mi_probit: program name
+		
+	*) Check programming
+	ml check
+	*) Define initial values
+	ml search
+	*) Maximize the model
+	ml max
+	*) Checking for changes in convergence
+	ml graph
