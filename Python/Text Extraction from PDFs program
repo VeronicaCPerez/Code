@@ -1,0 +1,63 @@
+#pip install before if not installed
+
+import pandas as pd
+import PyPDF2 
+import re
+import pdfplumber
+import os
+from os.path import isfile, join
+#paths
+
+pdf_path = input('Enter PDF path: ')
+txt_path = input('Path for resulting txt file: ')
+docs =  int(input('How many different documents you wish to extract: '))
+
+
+
+
+while docs > 0: 
+    
+    pdf_name = input('Enter the document name, including .pdf in the name:')
+    numberpages = int(input('Enter 0 for all pages, 1 for a single one, and 2 for a range:'))
+    
+    if numberpages == 0:
+        with pdfplumber.open(join(pdf_path, pdf_name)) as pdf:
+            pages = pdf.pages
+            pdf_name = re.sub(".pdf","",pdf_name)
+            
+            for i,p in enumerate(pages):
+                text_pg = pages[i].extract_text()
+                pg_name = pdf_name + "_" + str(i) + ".txt"
+                with open(join(txt_path,pg_name),mode = "w",encoding= "utf-8") as o:
+                    o.write(text_pg)
+
+    elif numberpages == 1:
+        page =int(input('Enter page to extract:'))
+        with pdfplumber.open(join(pdf_path, pdf_name)) as pdf:
+            pdf_name = re.sub(".pdf","",pdf_name)
+            pg_name = pdf_name + "_" + str(page) + ".txt"
+
+            pages = pdf.pages
+            text_pg = pages[page-1].extract_text()
+            
+            with open(join(txt_path,pg_name),mode = "w",encoding= "utf-8") as o:
+                o.write(text_pg)
+
+    elif numberpages == 2:
+        start, end = [int(f) for f in input('Enter the first and last page of the range, separated by space:').split(' ')]
+        with pdfplumber.open(join(pdf_path, pdf_name)) as pdf:
+            pages = pdf.pages
+            pdf_name = re.sub(".pdf","",pdf_name)
+            
+            pg_name = pdf_name + "_" + str(start) + "_" + str(end) + ".txt"
+            open(join(txt_path,pg_name),mode = "w",encoding= "utf-8")
+
+            for e in range(start-1,end):
+                text_pg = pages[e].extract_text()
+                with open(join(txt_path,pg_name),mode = "a",encoding= "utf-8") as o:
+                    o.write(text_pg)
+
+    print("doc ", pdf_name, "done")
+    docs = docs - 1
+
+print("Closing program")
